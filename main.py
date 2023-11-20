@@ -1,8 +1,11 @@
+import configparser
 import json
+import logging
 
 import gradio as gr
+from requests import Response
 
-from MSALApp import to_field_name, MSALApp
+import MSALApp
 
 with open("static_data.json") as f:
     static_data = json.load(f)
@@ -10,8 +13,9 @@ with open("static_data.json") as f:
 systems = static_data["systems"]
 activities = static_data["activities"]
 extensions = static_data["extensions"]
-
-xrmtool = MSALApp()
+mappings = static_data["mappings"]
+ignore = static_data["ignore"]
+relationships = static_data["relationships"]
 
 
 def notnull(value: object, message: str) -> None:
@@ -23,9 +27,6 @@ def notnull(value: object, message: str) -> None:
     """
     if not value:
         raise gr.Error(message)
-
-
-notnull(xrmtool.app, "App couldn't be initialized. Missing API variables in environment!")
 
 
 def get_entities(system: str) -> list[str]:
@@ -46,39 +47,193 @@ def get_entities(system: str) -> list[str]:
 
 
 def prepare_data(data):
-    new_data = data
-    del data["@odata.etag"]
-    for value in data:
-        if not value:
-            new_data.pop(value)
+    new_data = data.copy()
+    references = []
+    del new_data["@odata.etag"]
+    for key in data:
+        value = data[key]
 
-    return new_data
+        if not value:
+            new_data.pop(key)
+            continue
+
+        if key[0] == "_":
+            trimmed_key = key[1:-6]
+            references.append([trimmed_key, value])
+            new_data.pop(key)
+
+    return new_data, references
+
+
+def already_exists(target_system, entity, id):
+    response = xrmtool.get(
+        target_system,
+        entity,
+        filter=f"filter=({MSALApp.to_field_name(entity)} eq {id})",
+    )
+    response_list = list(response)
+    if len(response_list) == 0:
+        return False
+
+    return True
+
+
+def response_is_error(response: Response):
+    try:
+        return response.json()["error"]
+    except KeyError:
+        return None
+
+
+def search_dictionary(dictionary: dict, search: str):
+    """
+    Searches a dictionary and returns the key of the value
+    :param dictionary: The dictionary to search in
+    :param search: The Value to search in the dictionary
+    :return: The key of the value
+    """
+    for key, value in dictionary.items():
+        if value == search:
+            return key
+    return None
 
 
 def transfer_data(
-        source_system: str,
-        target_system: str,
-        filter: str,
-        entity: str,
-        include_relation: int,
-        dropdown: int,
-        progress=gr.Progress(),
+    source_system: str,
+    target_system: str,
+    filter: str,
+    entity: str,
+    include_relation: int,
+    dropdown: int,
+    posts=None,
+    processed_ids=None,
+    progress=gr.Progress(),
 ):
+    if processed_ids is None:
+        processed_ids = set()
+    if posts is None:
+        posts = []
     notnull(source_system, "Please select a source system")
     notnull(entity, "Please select an entity to export")
 
-    result = xrmtool.get(source_system, entity, filter)
+    response = xrmtool.get(source_system, entity, filter)
 
-    notnull(result, f"Entity {entity} did not return any data with filter {filter}")
+    notnull(response, f"Entity {entity} did not return any data with filter {filter}")
 
-    for value in result:
-        if value[0] == "_":
-            print(value)
+    for res in progress.tqdm(response, f"Processing {entity.lower()}", unit="Entities"):
+        id = res[MSALApp.to_field_name(entity)]
 
-    return gr.update(value="{}")
+        if entity in ignore or entity in activities:
+            continue
+
+        if id in processed_ids:
+            continue
+
+        if already_exists(target_system, entity, id):
+            continue
+
+        prepared_data = prepare_data(res)
+        payload = prepared_data[0]
+        references = prepared_data[1]
+
+        obj = {"id": id, "entity": entity, "payload": payload}
+        posts.append(obj)
+
+        for reference in progress.tqdm(
+            references,
+            desc="Processing relations...",
+            unit="Relations",
+        ):
+            referencing_field = reference[0]
+            referencing_entity: str = extensions[reference[0]]
+            referencing_entity_id: str = reference[1]
+
+            if referencing_entity in ignore or referencing_entity in activities:
+                continue
+
+            if referencing_entity_id in processed_ids:
+                continue
+
+            reference_response = xrmtool.get(
+                source_system,
+                referencing_entity,
+                f"filter=({MSALApp.to_field_name(referencing_entity)} eq {referencing_entity_id})",
+            )
+
+            reference_prepared_data = prepare_data(reference_response[0])
+            reference_payload = reference_prepared_data[0]
+
+            payload[referencing_field] = reference_payload
+
+            processed_ids.add(referencing_entity_id)
+            posts.append(obj)
+
+            transfer_data(
+                source_system,
+                target_system,
+                f"filter=({MSALApp.to_field_name(referencing_entity)} eq {referencing_entity_id})",
+                referencing_entity,
+                include_relation,
+                dropdown,
+                posts,
+                processed_ids,
+                progress,
+            )
+        processed_ids.add(id)
+    return gr.update(value=posts)
 
 
-def process_requests(system, reqs):
+def search_nested_dict(dictionary, target_value, parent=None):
+    for key, value in dictionary.items():
+        if value == target_value:
+            return parent
+        elif isinstance(value, dict):
+            result = search_nested_dict(value, target_value, parent=key)
+            if result is not None:
+                return result
+    return None
+
+
+def process_requests(system, reqs, progress=gr.Progress()):
+    for request in progress.tqdm(reqs, "Posting Entities...", unit="Entities"):
+        id = request["id"]
+        entity = request["entity"]
+        payload: dict = request["payload"]
+
+        while error := response_is_error(
+            response := xrmtool.post(system, entity, payload)
+        ):
+            error_code: str = error["code"]
+            error_message: str = error["message"]
+
+            print(error_code, error_message)
+
+            if error_code == "0x80040237":
+                break
+
+            # Some Entity in the Request does not exist in the target system
+            if error_code == "0x80040217":
+                entity = MSALApp.to_plural(error_message.split("'")[1])
+                print(error_message, "| Skipping this request:", request)
+                break
+
+            if error_code == "0x80048408":
+                search_for = error_message.split("Id ")[1][:-1]
+                parent_object = search_nested_dict(payload, search_for)
+                statuscode = payload[parent_object]["statuscode"]
+                statecode = payload[parent_object]["statecode"]
+
+                del payload[parent_object]["statuscode"]
+                del payload[parent_object]["statecode"]
+
+                print(
+                    f"https://myxrm-dev01.crm4.dynamics.com/main.aspx?appid=34c967dc-a13a-ea11-a812-000d3a4a1f5d&pagetype=entityrecord&etn={entity}&id={id}",
+                    statecode,
+                    statuscode,
+                )
+                continue
+
+        print(response)
     return gr.update(value="Done")
 
 
@@ -98,7 +253,7 @@ def on_relation_settings_change(system, choice, entity_name: str):
                 for data in xrmtool.get(
                     system,
                     "relationships",
-                    f"select=name&$filter=(startswith(name, '{to_field_name(entity_name)[:-2]}'))",
+                    f"select=name&$filter=(startswith(name, '{MSALApp.to_field_name(entity_name)[:-2]}'))",
                 )
             ],
             interactive=True,
@@ -106,6 +261,12 @@ def on_relation_settings_change(system, choice, entity_name: str):
     else:
         return gr.update(interactive=False)
 
+
+xrmtool = MSALApp.App()
+
+notnull(
+    xrmtool.app, "App couldn't be initialized. Missing API variables in environment!"
+)
 
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     source_system = gr.Dropdown(
@@ -198,4 +359,4 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
 
     reqs.change(process_requests, inputs=[target_system, reqs], outputs=[final])
 
-demo.launch(show_error=True, server_port=8080, ssl_verify=True, enable_queue=True)
+demo.launch(show_error=True, server_port=80, ssl_verify=True, enable_queue=True)

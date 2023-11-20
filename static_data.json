@@ -17,14 +17,23 @@
     "ignore": [
         "organizations",
         "businessunits",
-        "afd_countries",
-        "systemusers"
+        "transactioncurrencies",
+        "systemusers",
+        "systemuser"
     ],
     "ignore_codes": [
         "0x80048cf3",
         "0x80040237"
     ],
+    "relationships": {
+        "afd_contact_leads": "afd_Contact_leads",
+        "afd_channelid_contacts": "afd_Channel_contacts",
+        "afd_account_leads": "afd_Account_leads",
+        "msdyn_predictivescoreid_leads": "msdyn_msdyn_predictivescore_lead",
+        "afd_supportingteammember_leads": "lead_supportingteammember_systemuser"
+    },
     "extensions": {
+        "qualifyingopportunityid": "opportunities",
         "afd_channelid": "afd_channels",
         "transactioncurrencyid": "transactioncurrencies",
         "owninguser": "systemusers",
@@ -39,27 +48,28 @@
         "owningteam": "teams",
         "targetgroupid": "afd_targetgroups",
         "globalentityid": "afd_globalentities",
-        "salesaccelerationinsightid": "msdyn_salesaccelerationinsights",
+        "msdyn_salesaccelerationinsightid": "msdyn_salesaccelerationinsights",
         "preferredequipmentid": "equipments",
         "slainvokedid": "slas",
+        "msdyn_leadid": "leads",
         "afd_channel": "afd_channels",
         "primarycontactid": "contacts",
         "managingpartnerid": "accounts",
         "createdonbehalfby": "systemusers",
         "modifiedonbehalfby": "systemusers",
-        "segmentid": "msdynmkt_segments",
+        "msdyn_segmentid": "msdynmkt_segments",
         "preferredserviceid": "services",
         "organizationid": "organizations",
         "modifiedbyexternalparty": "externalparties",
         "createdbyexternalparty": "externalparties",
-        "targetgroupspecificationid": "afd_targetgroupspecifications",
+        "afd_targetgroupspecificationid": "afd_targetgroupspecifications",
         "masterid": "accounts",
         "defaultemailserverprofileid": "msdyn_providers",
         "defaultpricelevelid": "pricelevels",
         "managerid": "systemusers",
         "territoryid": "territories",
         "originatingleadid": "leads",
-        "scoringresponsibleuser": "systemusers",
+        "afd_scoringresponsibleuser": "systemusers",
         "parentaccountid": "accounts",
         "slaid": "slas",
         "preferredsystemuserid": "systemusers",
@@ -71,7 +81,7 @@
         "afd_salesregionid": "afd_salesreagions",
         "defaultmailbox": "mailboxes",
         "parentsystemuserid": "afd_systems",
-        "afd_currencyid": "afd_currencies",
+        "afd_currencyid": "transactioncurrencies",
         "queueid": "queues",
         "parentbusinessunitid": "businessunits",
         "msdyn_accountid": "accounts",
@@ -96,7 +106,6 @@
         "parentterritoryid": "territories"
     },
     "mappings": {
-        "account_Tasks": "regardingobjectid",
-        "account_Emails": "regardingobjectid"
+
     }
 }

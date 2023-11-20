@@ -1,13 +1,25 @@
-from json import dumps, load
-from os import environ
+import json
+import os
+import logging
+from typing import List, Any
 
 import msal
 import requests
 
-static_data = load(open("static_data.json"))
+from requests import Response
+
+static_data = json.load(open("static_data.json"))
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s -> \t %(message)s",
+    filemode="w",
+    datefmt="%d/%m/%Y %I:%M:%S",
+    filename=f"latest.log",
+    encoding="utf-8",
+    level=logging.NOTSET,
+)
 
 
-class MSALApp:
+class App:
     """
     Wrapper for the msal library with request features for XRM
     """
@@ -26,18 +38,28 @@ class MSALApp:
         :raises KeyError: If one of the variables does not exist
         """
 
+        logging.info("Initializing MSAL")
+
         try:
-            tenant = environ["tenant_id"]
-            client_id = environ["client_id"]
-            client_secret = environ["client_secret"]
+            tenant = os.environ["tenant_id"]
+            client_id = os.environ["client_id"]
+            client_secret = os.environ["client_secret"]
         except KeyError:
             self.app = None
+            logging.error(
+                "Error while initializing MSAL application. Missing environment variables for "
+                "authentication!"
+            )
             return
 
         self.app = msal.ConfidentialClientApplication(
             client_id,
             authority=f"https://login.microsoftonline.com/{tenant}",
             client_credential=client_secret,
+        )
+
+        logging.info(
+            "Successfully established a connection and created the client application"
         )
 
     def generate_token(self, system: str) -> str:
@@ -58,7 +80,7 @@ class MSALApp:
             result = self.app.acquire_token_for_client(scopes=scopes)
         return result["access_token"]
 
-    def get(self, system: str, entity: str, filter) -> list[object]:
+    def get(self, system: str, entity: str, filter="") -> list[Any]:
         """
         Retrieves data from a specified entity in a system.
 
@@ -71,16 +93,16 @@ class MSALApp:
         :return: A list of objects representing the retrieved data.
         :rtype: list[object]
         """
+        url = f"https://{system}.crm4.dynamics.com/api/data/v9.2/{entity}?${filter}"
+        logging.info(f"GET {url}")
         response = requests.get(
-            f"https://{system}.crm4.dynamics.com/api/data/v9.2/{entity}?${filter}",
+            url,
             headers={"Authorization": f"Bearer {self.generate_token(system)}"},
         )
-        result = response.json()["value"]
-        if len(result) == 1:
-            return result[0]
-        return result
 
-    def post(self, system: str, entity: str, data) -> object:
+        return list(response.json()["value"])
+
+    def post(self, system: str, entity: str, payload) -> Response:
         """
         Performs a POST request to create a new entity in the specified system.
 
@@ -88,19 +110,21 @@ class MSALApp:
         :type system: str
         :param entity: The entity to create.
         :type entity: str
-        :param data: The data to be included in the entity.
-        :type data: object
+        :param payload: The data to be included in the entity.
+        :type payload: object
         :return: The response object from the POST request.
         :rtype: object
         """
-        url = f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}({data[to_field_name(entity)]})"
-        data.pop(to_field_name(entity))
+        url = f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}"
+        logging.info(f"POST {url}")
 
-        print("Doing POST on:", url, data)
         return requests.post(
             url,
-            headers={"Authorization": f"Bearer {self.generate_token(system)}"},
-            json=dumps(data),
+            headers={
+                "Authorization": f"Bearer {self.generate_token(system)}",
+                "Prefer": "return=representation",
+            },
+            json=json.dumps(payload),
         )
 
     def patch(self, system, entity, id, data) -> object:
@@ -117,11 +141,13 @@ class MSALApp:
         :return: The response object from the PATCH request.
         :rtype: object
         """
+        url = f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}({id})"
+        logging.info(f"PATCH {url}")
         return requests.patch(
-            f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}({id})",
+            url,
             data,
             headers={"Authorization": f"Bearer {self.generate_token(system)}"},
-            json=dumps(data),
+            json=json.dumps(data),
         )
 
 
