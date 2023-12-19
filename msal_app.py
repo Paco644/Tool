@@ -6,11 +6,14 @@ from requests import Response
 
 from record import Record
 
+from misc import System
+
 
 class App_do_not_use:
     """
     Wrapper for the msal library with request features for XRM
     """
+    first_init = True
 
     def __init__(self):
         """
@@ -25,6 +28,9 @@ class App_do_not_use:
         - "client_secret": The client secret of the application.
         :raises KeyError: If one of the variables does not exist
         """
+
+        if not self.first_init:
+            return
 
         try:
             print("Creating confidential client application...")
@@ -41,9 +47,9 @@ class App_do_not_use:
             client_credential=client_secret,
         )
 
-        print("Done initializing app!")
+        self.first_init = False
 
-    def generate_token(self, system: str) -> str:
+    def generate_token(self, system: System) -> str:
         """
         Generates a bearer token for authorization.
 
@@ -61,7 +67,7 @@ class App_do_not_use:
             result = self.app.acquire_token_for_client(scopes=scopes)
         return result["access_token"]
 
-    def get(self, system: str, entity: str, filter="") -> list[Record]:
+    def get(self, system: System, entity: str, filter="") -> list[Record]:
         """
         Retrieves data from a specified entity in a system.
 
@@ -84,7 +90,7 @@ class App_do_not_use:
             records.append(Record(entity, item))
         return records
 
-    def post(self, system: str, entity: str, payload) -> Response:
+    def post(self, system: System, entity: str, payload) -> Response:
         """
         Performs a POST request to create a new entity in the specified system.
 
@@ -130,9 +136,8 @@ class App_do_not_use:
         )
 
 
-class App(App_do_not_use):
+class MsalApp(App_do_not_use):
     def __new__(cls):
         if not hasattr(cls, "instance"):
-            print("Creating Instance")
             cls.instance = super(App_do_not_use, cls).__new__(cls)
         return cls.instance

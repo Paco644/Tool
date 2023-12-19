@@ -1,10 +1,10 @@
 import gradio as gr
 
 import main
-from msal_app import App
+from msal_app import MsalApp
 from misc import System, get_enum_values, Activity, Ignore, to_field_name
 
-crm = App()
+crm = MsalApp()
 
 
 def on_relation_settings_change(system, choice, entity_name: str):
