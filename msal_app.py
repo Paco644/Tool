@@ -1,25 +1,13 @@
 import json
 import os
-import logging
-from typing import List, Any
-
 import msal
 import requests
-
 from requests import Response
 
-static_data = json.load(open("static_data.json"))
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s -> \t %(message)s",
-    filemode="w",
-    datefmt="%d/%m/%Y %I:%M:%S",
-    filename=f"latest.log",
-    encoding="utf-8",
-    level=logging.NOTSET,
-)
+from record import Record
 
 
-class App:
+class App_do_not_use:
     """
     Wrapper for the msal library with request features for XRM
     """
@@ -38,19 +26,14 @@ class App:
         :raises KeyError: If one of the variables does not exist
         """
 
-        logging.info("Initializing MSAL")
-
         try:
+            print("Creating confidential client application...")
             tenant = os.environ["tenant_id"]
             client_id = os.environ["client_id"]
             client_secret = os.environ["client_secret"]
         except KeyError:
             self.app = None
-            logging.error(
-                "Error while initializing MSAL application. Missing environment variables for "
-                "authentication!"
-            )
-            return
+            exit(0)
 
         self.app = msal.ConfidentialClientApplication(
             client_id,
@@ -58,9 +41,7 @@ class App:
             client_credential=client_secret,
         )
 
-        logging.info(
-            "Successfully established a connection and created the client application"
-        )
+        print("Done initializing app!")
 
     def generate_token(self, system: str) -> str:
         """
@@ -80,7 +61,7 @@ class App:
             result = self.app.acquire_token_for_client(scopes=scopes)
         return result["access_token"]
 
-    def get(self, system: str, entity: str, filter="") -> list[Any]:
+    def get(self, system: str, entity: str, filter="") -> list[Record]:
         """
         Retrieves data from a specified entity in a system.
 
@@ -94,13 +75,14 @@ class App:
         :rtype: list[object]
         """
         url = f"https://{system}.crm4.dynamics.com/api/data/v9.2/{entity}?${filter}"
-        logging.info(f"GET {url}")
         response = requests.get(
             url,
             headers={"Authorization": f"Bearer {self.generate_token(system)}"},
         )
-
-        return list(response.json()["value"])
+        records: list[Record] = []
+        for item in list(response.json()["value"]):
+            records.append(Record(entity, item))
+        return records
 
     def post(self, system: str, entity: str, payload) -> Response:
         """
@@ -116,8 +98,6 @@ class App:
         :rtype: object
         """
         url = f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}"
-        logging.info(f"POST {url}")
-
         return requests.post(
             url,
             headers={
@@ -142,7 +122,6 @@ class App:
         :rtype: object
         """
         url = f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}({id})"
-        logging.info(f"PATCH {url}")
         return requests.patch(
             url,
             data,
@@ -151,36 +130,9 @@ class App:
         )
 
 
-# misc functions
-def to_field_name(entity: str) -> str:
-    """
-    Converts an entity name to its corresponding field name.
-
-    :param entity: The name of the entity.
-    :type entity: str
-    :return: The corresponding field name.
-    :rtype: str
-    """
-    if entity in static_data["activities"]:
-        return "activityid"
-
-    entity = entity[:-1]
-    if entity.endswith("ie"):
-        return entity[:-2] + "yid"
-    else:
-        return entity + "id"
-
-
-def to_plural(entity: str) -> str:
-    """
-    Converts an entity name to its plural form.
-
-    :param entity: The name of the entity.
-    :type entity: str
-    :return: The plural form of the entity name.
-    :rtype: str
-    """
-    if entity.endswith("y"):
-        return entity.lower() + "ies"
-    else:
-        return entity.lower() + "s"
+class App(App_do_not_use):
+    def __new__(cls):
+        if not hasattr(cls, "instance"):
+            print("Creating Instance")
+            cls.instance = super(App_do_not_use, cls).__new__(cls)
+        return cls.instance
