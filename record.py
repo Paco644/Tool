@@ -1,4 +1,8 @@
 from misc import to_field_name
+from misc import System
+from reference import Reference
+
+known_ids = []
 
 
 class Record:
@@ -6,19 +10,20 @@ class Record:
     Class wrapper for a record
     """
 
-    def __init__(self, entity_name: str, original_payload: dict[str, any]):
-        from reference import Reference
-
+    def __init__(
+        self, system: System, entity_name: str, original_payload: dict[str, any]
+    ):
         """
         A class wrapper for a crm record.
-
+        :param system: The system the record is currently in
         :param entity_name: The entity name of the record.
         :param original_payload: The original payload response returned from the web request.
         """
+        self.system = system
         self.entity_name = entity_name
         self.original_payload = original_payload
         self.references: list[Reference] = []
-        self.id = to_field_name(entity_name)
+        self.id = original_payload[to_field_name(entity_name)]
 
         new_payload = original_payload.copy()
         references = []
@@ -32,14 +37,16 @@ class Record:
 
             if key.startswith("_"):
                 trimmed_key = key[1:-6]
-                references.append(Reference(trimmed_key, value))
+                references.append(Reference(system, trimmed_key, value))
                 new_payload.pop(key)
 
         self.payload = new_payload
         self.references = references
 
     def already_exists(self, target_system):
-        response = crm.get(
+        from msal_app import crm
+
+        response = crm().get(
             target_system,
             self.entity_name,
             filter=f"filter=({to_field_name(self.entity_name)} eq {self.id})",
@@ -49,3 +56,11 @@ class Record:
             return False
 
         return True
+
+
+def get_record(system: System, entity: str, id: str) -> Record:
+    from msal_app import crm
+
+    print(entity)
+    records = crm().get(system, entity, f"filter=({to_field_name(entity)} eq {id})")
+    return records[0] if records else None

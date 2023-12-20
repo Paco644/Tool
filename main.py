@@ -1,24 +1,18 @@
-from requests import Response
-from misc import Activity, System, Ignore, to_field_name, to_plural
-from msal_app import MsalApp
+from misc import System
 from gradio import update
+from msal_app import crm
+from record import get_record
 
-import gradio_app
-
-crm = MsalApp()
 
 def transfer_data(
     source_system: System,
     target_system: System,
-    request_filter: str,
+    filter: str,
     entity: str,
-    include_relation: int,
-    dropdown: int,
+    ir: int,
+    dd: int,
 ):
-    records = crm.get(source_system, entity, request_filter)
-
-    for record in records:
-        print(record.payload)
+    record = crm().get(source_system, entity, filter)[0]
 
     return update(value={"test": True})
 
@@ -26,3 +20,8 @@ def transfer_data(
 def process_requests(system, reqs):
     print("Transferring Records")
     return update(value="Done")
+
+
+if __name__ == "__main__":
+    from gradio_app import GradioApp
+    gradio_app = GradioApp()

@@ -13,6 +13,7 @@ class App_do_not_use:
     """
     Wrapper for the msal library with request features for XRM
     """
+
     first_init = True
 
     def __init__(self):
@@ -87,7 +88,7 @@ class App_do_not_use:
         )
         records: list[Record] = []
         for item in list(response.json()["value"]):
-            records.append(Record(entity, item))
+            records.append(Record(system, entity, item))
         return records
 
     def post(self, system: System, entity: str, payload) -> Response:
@@ -141,3 +142,7 @@ class MsalApp(App_do_not_use):
         if not hasattr(cls, "instance"):
             cls.instance = super(App_do_not_use, cls).__new__(cls)
         return cls.instance
+
+
+def crm() -> MsalApp:
+    return MsalApp()

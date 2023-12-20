@@ -1,10 +1,12 @@
-from record import Record
+from misc import System, to_plural, Extension
 
 
 class Reference:
-    def __init__(self, key: str, id: str):
+    def __init__(self, system: System, key: str, id: str):
+        from record import get_record
+
+        self.system = system
+        self.entity = Extension[key].value
         self.key = key
         self.id = id
-
-    def get_record(self) -> Record:
-        pass
+        self.record = get_record(self.system, self.entity, id)
