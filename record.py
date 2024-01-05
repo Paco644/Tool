@@ -1,8 +1,6 @@
-from misc import to_field_name
-from misc import System
+from misc import to_field_name, to_plural
+from misc import System, Ignore
 from reference import Reference
-
-known_ids = []
 
 
 class Record:
@@ -30,15 +28,25 @@ class Record:
 
         new_payload.pop("@odata.etag", None)
 
+        known_records.append(self)
+
         for key, value in original_payload.items():
             if not value:
                 new_payload.pop(key)
                 continue
 
             if key.startswith("_"):
-                trimmed_key = key[1:-6]
-                references.append(Reference(system, trimmed_key, value))
+                if key.endswith("lookuplogicalname"):
+                    ref_entity = to_plural(value)
+                    new_payload.pop(key)
+                    continue
+
                 new_payload.pop(key)
+
+                if ref_entity in [member.value for member in Ignore]:
+                    continue
+
+                references.append(Reference(system, ref_entity, value))
 
         self.payload = new_payload
         self.references = references
@@ -57,10 +65,29 @@ class Record:
 
         return True
 
+    def build_export_string(self, system: System):
+
+        ref_obj = {}
+
+        for ref in self.references:
+            pass
+
+        return {"payload": self.payload, "references": self.references}
+
 
 def get_record(system: System, entity: str, id: str) -> Record:
     from msal_app import crm
 
-    print(entity)
     records = crm().get(system, entity, f"filter=({to_field_name(entity)} eq {id})")
     return records[0] if records else None
+
+
+def id_in_list(id: str):
+    for record in known_records:
+        if record.id == id:
+            return record
+    else:
+        return None
+
+
+known_records: list[Record] = []

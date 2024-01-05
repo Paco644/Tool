@@ -4,9 +4,9 @@ import msal
 import requests
 from requests import Response
 
-from record import Record
+from record import Record, id_in_list
 
-from misc import System
+from misc import System, to_field_name, Ignore
 
 
 class App_do_not_use:
@@ -69,6 +69,7 @@ class App_do_not_use:
         return result["access_token"]
 
     def get(self, system: System, entity: str, filter="") -> list[Record]:
+
         """
         Retrieves data from a specified entity in a system.
 
@@ -84,11 +85,23 @@ class App_do_not_use:
         url = f"https://{system}.crm4.dynamics.com/api/data/v9.2/{entity}?${filter}"
         response = requests.get(
             url,
-            headers={"Authorization": f"Bearer {self.generate_token(system)}"},
+            headers={"Authorization": f"Bearer {self.generate_token(system)}", "Prefer": "odata.include-annotations=\"Microsoft.Dynamics.CRM.lookuplogicalname\""},
         )
         records: list[Record] = []
-        for item in list(response.json()["value"]):
-            records.append(Record(system, entity, item))
+
+        try:
+            response = response.json()["value"]
+        except KeyError:
+            print(url)
+
+        for item in list(response):
+            id = item[to_field_name(entity)]
+            if record := id_in_list(id):
+                print("Getting", record.entity_name, "with id", record.id, "from dictionary")
+                records.append(record)
+            else:
+                records.append(Record(system, entity, item))
+
         return records
 
     def post(self, system: System, entity: str, payload) -> Response:

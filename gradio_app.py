@@ -9,6 +9,49 @@ def on_entity_change():
     return gr.update(), gr.update(value="Only export response")
 
 
+def get_entities(system: System) -> list[str]:
+    """
+    Retrieves all entities from a system
+    :param system: Systemname (e.g. 'myxrm-dev01')
+    :type system: str
+    :return: List of all entities of the system
+    """
+
+    print(system)
+
+    local_ignore = [*get_enum_values(Activity), *get_enum_values(Ignore)]
+
+    entities_json = crm().get(system, "entities", "select=entitysetname")
+    entities = [
+        entity.payload["entitysetname"]
+        for entity in entities_json
+        if entity.payload["entitysetname"] not in local_ignore
+    ]
+    entities.sort()
+    return entities
+
+
+def on_system_change(system: System):
+    return gr.update(choices=get_entities(system))
+
+
+def on_relation_settings_change(system, choice, entity_name: str):
+    if choice == 1:
+        return gr.update(
+            choices=[
+                data.payload["name"].split("_", 1)[1]
+                for data in crm().get(
+                    system,
+                    "relationships",
+                    f"select=name&$filter=(startswith(name, '{to_field_name(entity_name)[:-2]}'))",
+                )
+            ],
+            interactive=True,
+        )
+    else:
+        return gr.update(interactive=False)
+
+
 class GradioApp:
     def __init__(self):
         with gr.Blocks(theme=gr.themes.Soft()) as demo:
@@ -28,7 +71,7 @@ class GradioApp:
                 )
 
                 entity = gr.Dropdown(
-                    self.get_entities(source_system.value),
+                    get_entities(source_system.value),
                     label="Selected entity",
                 )
 
@@ -67,13 +110,13 @@ class GradioApp:
 
             # Listeners
             include_relations.change(
-                self.on_relation_settings_change,
+                on_relation_settings_change,
                 inputs=[source_system, include_relations, entity],
                 outputs=relation_dropdown,
             )
 
             source_system.change(
-                self.on_system_change, inputs=source_system, outputs=entity
+                on_system_change, inputs=source_system, outputs=entity
             )
 
             send_button.click(
@@ -99,44 +142,4 @@ class GradioApp:
                 main.process_requests, inputs=[target_system, reqs], outputs=[final]
             )
 
-        demo.launch(show_error=True, server_port=80, ssl_verify=True, enable_queue=True)
-
-    def on_relation_settings_change(self, system, choice, entity_name: str):
-        if choice == 1:
-            return gr.update(
-                choices=[
-                    data.payload["name"].split("_", 1)[1]
-                    for data in crm().get(
-                        system,
-                        "relationships",
-                        f"select=name&$filter=(startswith(name, '{to_field_name(entity_name)[:-2]}'))",
-                    )
-                ],
-                interactive=True,
-            )
-        else:
-            return gr.update(interactive=False)
-
-    def on_system_change(self, system: System):
-        return gr.update(choices=self.get_entities(system))
-
-    def get_entities(self, system: System) -> list[str]:
-        """
-        Retrieves all entities from a system
-        :param system: Systemname (e.g. 'myxrm-dev01')
-        :type system: str
-        :return: List of all entities of the system
-        """
-
-        print(system)
-
-        local_ignore = [*get_enum_values(Activity), *get_enum_values(Ignore)]
-
-        entities_json = crm().get(system, "entities", "select=entitysetname")
-        entities = [
-            entity.payload["entitysetname"]
-            for entity in entities_json
-            if entity.payload["entitysetname"] not in local_ignore
-        ]
-        entities.sort()
-        return entities
+        demo.launch(show_error=True, server_port=80, ssl_verify=True)

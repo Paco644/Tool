@@ -1,7 +1,6 @@
 from misc import System
 from gradio import update
 from msal_app import crm
-from record import get_record
 
 
 def transfer_data(
@@ -12,16 +11,25 @@ def transfer_data(
     ir: int,
     dd: int,
 ):
-    record = crm().get(source_system, entity, filter)[0]
 
-    return update(value={"test": True})
+    records = crm().get(source_system, entity, filter)
+
+    data = {}
+
+    for record in records:
+        if record.already_exists(target_system):
+            continue
+        data[record.id] = record.build_export_string(target_system)
+
+    return update(value=data)
 
 
-def process_requests(system, reqs):
+def process_requests(system, records):
     print("Transferring Records")
     return update(value="Done")
 
 
 if __name__ == "__main__":
     from gradio_app import GradioApp
+
     gradio_app = GradioApp()
