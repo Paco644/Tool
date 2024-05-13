@@ -21,13 +21,14 @@ def get_entities(system: System) -> list[str]:
 
     local_ignore = [*get_enum_values(Activity), *get_enum_values(Ignore)]
 
-    entities_json = crm().get(system, "entities", "select=entitysetname")
+    entities_json = crm().get(system, "entities", "select=entitysetname", False)
     entities = [
         entity.payload["entitysetname"]
         for entity in entities_json
         if entity.payload["entitysetname"] not in local_ignore
     ]
     entities.sort()
+
     return entities
 
 

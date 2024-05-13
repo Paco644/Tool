@@ -9,7 +9,11 @@ class Record:
     """
 
     def __init__(
-        self, system: System, entity_name: str, original_payload: dict[str, any]
+        self,
+        system: System,
+        entity_name: str,
+        original_payload: dict[str, any],
+        cache_record,
     ):
         """
         A class wrapper for a crm record.
@@ -28,7 +32,8 @@ class Record:
 
         new_payload.pop("@odata.etag", None)
 
-        known_records.append(self)
+        if cache_record:
+            known_records[self.id] = self
 
         for key, value in original_payload.items():
             if not value:
@@ -46,7 +51,7 @@ class Record:
                 if ref_entity in [member.value for member in Ignore]:
                     continue
 
-                references.append(Reference(system, ref_entity, value))
+                references.append(Reference(system, ref_entity, value, key[1:-6]))
 
         self.payload = new_payload
         self.references = references
@@ -66,13 +71,17 @@ class Record:
         return True
 
     def build_export_string(self, system: System):
-
         ref_obj = {}
 
         for ref in self.references:
+            print(ref.key)
             pass
 
-        return {"payload": self.payload, "references": self.references}
+        return {
+            "entity": self.entity_name,
+            "payload": self.payload,
+            "references": self.references,
+        }
 
 
 def get_record(system: System, entity: str, id: str) -> Record:
@@ -82,12 +91,4 @@ def get_record(system: System, entity: str, id: str) -> Record:
     return records[0] if records else None
 
 
-def id_in_list(id: str):
-    for record in known_records:
-        if record.id == id:
-            return record
-    else:
-        return None
-
-
-known_records: list[Record] = []
+known_records: dict[str, Record] = {}

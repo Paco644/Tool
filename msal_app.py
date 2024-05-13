@@ -4,7 +4,7 @@ import msal
 import requests
 from requests import Response
 
-from record import Record, id_in_list
+from record import Record, known_records
 
 from misc import System, to_field_name, Ignore
 
@@ -68,11 +68,11 @@ class App_do_not_use:
             result = self.app.acquire_token_for_client(scopes=scopes)
         return result["access_token"]
 
-    def get(self, system: System, entity: str, filter="") -> list[Record]:
-
+    def get(self, system: System, entity: str, filter, cache_record: bool = True) -> list[Record]:
         """
         Retrieves data from a specified entity in a system.
 
+        :param cache_record: Flag if the record should be saved in cache for further usage
         :param system: The system to retrieve data from.
         :type system: str
         :param entity: The entity to retrieve data from.
@@ -82,10 +82,17 @@ class App_do_not_use:
         :return: A list of objects representing the retrieved data.
         :rtype: list[object]
         """
+
+        if not filter:
+            filter = ""
+
         url = f"https://{system}.crm4.dynamics.com/api/data/v9.2/{entity}?${filter}"
         response = requests.get(
             url,
-            headers={"Authorization": f"Bearer {self.generate_token(system)}", "Prefer": "odata.include-annotations=\"Microsoft.Dynamics.CRM.lookuplogicalname\""},
+            headers={
+                "Authorization": f"Bearer {self.generate_token(system)}",
+                "Prefer"       : 'odata.include-annotations="Microsoft.Dynamics.CRM.lookuplogicalname"',
+            },
         )
         records: list[Record] = []
 
@@ -96,11 +103,19 @@ class App_do_not_use:
 
         for item in list(response):
             id = item[to_field_name(entity)]
-            if record := id_in_list(id):
-                print("Getting", record.entity_name, "with id", record.id, "from dictionary")
+
+            if id in known_records:
+                record = known_records[id]
+                print(
+                    "Getting",
+                    record.entity_name,
+                    "with id",
+                    record.id,
+                    "from dictionary",
+                )
                 records.append(record)
             else:
-                records.append(Record(system, entity, item))
+                records.append(Record(system, entity, item,cache_record))
 
         return records
 
@@ -122,7 +137,7 @@ class App_do_not_use:
             url,
             headers={
                 "Authorization": f"Bearer {self.generate_token(system)}",
-                "Prefer": "return=representation",
+                "Prefer"       : "return=representation",
             },
             json=json.dumps(payload),
         )
