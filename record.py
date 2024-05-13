@@ -64,11 +64,7 @@ class Record:
             self.entity_name,
             filter=f"filter=({to_field_name(self.entity_name)} eq {self.id})",
         )
-        response_list = list(response)
-        if len(response_list) == 0:
-            return False
-
-        return True
+        return bool(list(response))
 
     def build_export_string(self, system: System):
         ref_obj = {}
