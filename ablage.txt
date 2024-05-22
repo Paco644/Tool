@@ -1,0 +1,31 @@
+POST [Organization URI]/api/data/v9.0/accounts
+Content-Type: application/json; charset=utf-8
+OData-MaxVersion: 4.0
+OData-Version: 4.0
+Accept: application/json
+
+{
+ "name": "Sample Account",
+ "primarycontactid":
+ {
+     "firstname": "John",
+     "lastname": "Smith"
+ },
+ "opportunity_customer_accounts":
+ [
+  {
+      "name": "Opportunity associated to Sample Account",
+      "Opportunity_Tasks":
+      [
+       { "subject": "Task associated to opportunity" }
+      ]
+  }
+ ]
+}
+
+Wenn Datensatz vorhanden, mit z.b. accounts(ID) referenzieren.
+Falls nicht vorhanden einen neuen Datensatz erstellen (Siehe oben)
+
+To determine whether two entities can be mapped, use the following query:
+
+GET [Organization URI]/api/data/v9.1/entitymaps?$select=sourceentityname,targetentityname&$orderby=sourceentityname
