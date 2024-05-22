@@ -1,57 +1,110 @@
 import json
 
+import gradio
+
 from misc import System
-from gradio import update
+from gradio import update, Progress
 from msal_app import crm
-from record import known_records, Record
+from record import known_records, Record, filter_existing_records
+from reference import Reference
 
 
-def merge(records: dict[str:Record], layer=0) -> dict:
-    # Get all parent ids to know what exists
-    parent_ids = [set()]
+def traverse_record(record: Record, already_traversed=None):
+    if already_traversed is None:
+        already_traversed = []
 
-    for id, record in records.items():
-        parent_ids[layer].add(id)
+    def traverse_reference(record: Record, reference: Reference, already_traversed):
+        if reference.id in already_traversed:
+            record.payload[
+                reference.key + "@odata.bind"
+            ] = f"/{reference.entity}({reference.record.id})"
+            return
 
-    for id, record in records.items():
-        for ref in record.references:
-            if ref.id in parent_ids[layer]:
-                obj = ref.record.payload
+        data = [].append(reference.record.payload)
+        print(data)
 
-                records[id].payload[ref.key] = obj
+        # record.payload[reference.key] = data
+        # CHANGE THIS ASAP
+        record.payload[
+            reference.key + "@odata.bind"
+        ] = f"/{reference.entity}({reference.record.id})"
 
-                print(record.payload)
-                del records[id]
-            return merge(records)
+        traverse_record(reference.record, already_traversed)
 
-    return records
+    if record.id in already_traversed:
+        return
+    else:
+        already_traversed.append(record.id)
+
+    print(f"Traversing record of type {record.entity_name} with id {record.id}")
+
+    for ref in record.references.values():
+        traverse_reference(record, ref, already_traversed)
 
 
 def transfer_data(
-        source_system: System,
-        target_system: System,
-        filter: str,
-        entity: str,
-        include_relations: int,
-        dropdown,
+    source_system: System,
+    target_system: System,
+    filter: str,
+    entity: str,
+    include_relations: int,
+    dropdown,
 ):
+    print(f"{len(known_records.values())} records in cache")
+
     records = crm().get(source_system, entity, filter)
 
-    print(
-        f"Loaded a total of {len(known_records.values())} unique records into cache that will be needed for transfer"
-    )
+    print("\nDONE GETTING ALL THE DATA\n")
 
-    merge(data := known_records.copy())
+    for record in records:
+        traverse_record(record)
 
-    for key, record in data.items():
-        print(record.payload)
+        obj = record.payload
 
+        post = crm().post(
+            target_system,
+            entity,
+            obj,
+        )
 
-    return update(value=data)
+        print(post.json())
+
+    return update(value=json.dumps(obj, indent=4))
 
 
 def process_requests(system, records):
     return update(value="Done")
+
+
+def transfer_configuration_settings(
+    source_system: System, target_system: System, dov, progress=Progress()
+):
+    entity = "afd_configurationsettings"
+
+    results = []
+    records = crm().get(source_system, entity)
+
+    # FILTER
+    for record in progress.tqdm(
+        filter_existing_records(records, target_system),
+        "Transferring configuration settings...",
+        unit="Configuration settings",
+    ):
+        # TODO REMOVE THIS WHEN FUNCTION IS OPTIMIZED
+        if record.already_exists(target_system):
+            continue
+
+        results.append(crm().post(target_system, entity, record.payload))
+
+    return update(value=results)
+
+
+def debug(choice, input):
+    if choice == 0:
+        raise NotImplementedError("Operation not yet supported")
+    elif choice == 1:
+        print()
+        return update(value=crm().post(System.DEV01.value, "accounts", input).json())
 
 
 if __name__ == "__main__":

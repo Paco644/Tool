@@ -68,7 +68,7 @@ class App_do_not_use:
             result = self.app.acquire_token_for_client(scopes=scopes)
         return result["access_token"]
 
-    def get(self, system: System, entity: str, filter, cache_record: bool = True) -> list[Record]:
+    def get(self, system: System, entity: str, filter: str = None, cache_record: bool = True) -> list[Record]:
         """
         Retrieves data from a specified entity in a system.
 
@@ -83,10 +83,7 @@ class App_do_not_use:
         :rtype: list[object]
         """
 
-        if not filter:
-            filter = ""
-
-        url = f"https://{system}.crm4.dynamics.com/api/data/v9.2/{entity}?${filter}"
+        url = f"https://{system}.crm4.dynamics.com/api/data/v9.2/{entity}{f"?${filter}" if filter else ""}"
         response = requests.get(
             url,
             headers={
@@ -115,11 +112,11 @@ class App_do_not_use:
                 )
                 records.append(record)
             else:
-                records.append(Record(system, entity, item,cache_record))
+                records.append(Record(system, entity, item, cache_record))
 
         return records
 
-    def post(self, system: System, entity: str, payload) -> Response:
+    def post(self, system: System, entity: str, payload: object) -> Response:
         """
         Performs a POST request to create a new entity in the specified system.
 
@@ -133,10 +130,12 @@ class App_do_not_use:
         :rtype: object
         """
         url = f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}"
+        print(url)
         return requests.post(
             url,
             headers={
                 "Authorization": f"Bearer {self.generate_token(system)}",
+                "Content-Type": 'application/json',
                 "Prefer"       : "return=representation",
             },
             json=json.dumps(payload),

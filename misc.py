@@ -32,6 +32,7 @@ class Ignore(Entity):
     BUSINESSUNITS = "businessunits"
     ORGANIZATIONS = "organizations"
     TRANSACTIONCURRENCIES = "transactioncurrencies"
+    ACCOUNTKPI = "msdyn_accountkpiitems"
     SALESREGIONS = "afd_salesregions"
     SALESHUBS = "afd_saleshubs"
 
@@ -51,7 +52,7 @@ def to_field_name(entity: str) -> str:
     if entity in [member.name for member in Activity]:
         return "activityid"
 
-    return singularize(entity)+"id"
+    return singularize(entity) + "id"
 
 
 def response_is_error(response: Response):

@@ -17,8 +17,6 @@ def get_entities(system: System) -> list[str]:
     :return: List of all entities of the system
     """
 
-    print(system)
-
     local_ignore = [*get_enum_values(Activity), *get_enum_values(Ignore)]
 
     entities_json = crm().get(system, "entities", "select=entitysetname", False)
@@ -45,6 +43,7 @@ def on_relation_settings_change(system, choice, entity_name: str):
                     system,
                     "relationships",
                     f"select=name&$filter=(startswith(name, '{to_field_name(entity_name)[:-2]}'))",
+                    False,
                 )
             ],
             interactive=True,
@@ -61,6 +60,9 @@ class GradioApp:
                 choices=get_enum_values(System),
                 value=System.PROD.value,
             )
+
+            # Tab 1
+            # Transfer using Web API
 
             tab1 = gr.Tab("Transfer using Web API")
             with tab1:
@@ -116,9 +118,7 @@ class GradioApp:
                 outputs=relation_dropdown,
             )
 
-            source_system.change(
-                on_system_change, inputs=source_system, outputs=entity
-            )
+            source_system.change(on_system_change, inputs=source_system, outputs=entity)
 
             send_button.click(
                 main.transfer_data,
@@ -142,5 +142,41 @@ class GradioApp:
             reqs.change(
                 main.process_requests, inputs=[target_system, reqs], outputs=[final]
             )
+
+            # Tab 2
+            # Transfer configuration settings
+
+            with gr.Tab("Transfer configuration settings"):
+                target_system_tcs = gr.Dropdown(
+                    label="Target system",
+                    choices=get_enum_values(System),
+                    value=System.DEV01.value,
+                    interactive=True,
+                )
+
+                dov = gr.Checkbox(label="Delete old values")
+
+                tcs_button = gr.Button("Transfer settings...")
+                tcs_output = gr.Textbox(label="Output data")
+
+            # Listeners
+            tcs_button.click(
+                main.transfer_configuration_settings,
+                inputs=[source_system, target_system_tcs, dov],
+                outputs=[tcs_output],
+            )
+
+            # Tab 3
+            # Debug
+
+            with gr.Tab("Debug"):
+                db_choice = gr.Radio(choices=["GET", "POST"], type="index", label="Method",
+                                     info="Choose one of these options", value="GET")
+                db_payload = gr.Textbox(label="Input", value=str({'name': 'Franz Meitz'}))
+                db_submit = gr.Button("Execute")
+                db_output = gr.Json(label="Output")
+
+            # Listeners
+            db_submit.click(main.debug, inputs=[db_choice, db_payload], outputs=[db_output])
 
         demo.launch(show_error=True, server_port=80, ssl_verify=True)

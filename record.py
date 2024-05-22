@@ -9,11 +9,11 @@ class Record:
     """
 
     def __init__(
-        self,
-        system: System,
-        entity_name: str,
-        original_payload: dict[str, any],
-        cache_record,
+            self,
+            system: System,
+            entity_name: str,
+            original_payload: dict[str, any],
+            cache_record,
     ):
         """
         A class wrapper for a crm record.
@@ -28,7 +28,7 @@ class Record:
         self.id = original_payload[to_field_name(entity_name)]
 
         new_payload = original_payload.copy()
-        references = []
+        references = {}
 
         new_payload.pop("@odata.etag", None)
 
@@ -48,10 +48,12 @@ class Record:
 
                 new_payload.pop(key)
 
-                if ref_entity in [member.value for member in Ignore]:
+                trimmed_key = key[1:-6]
+
+                if ref_entity in [member.value for member in Ignore] and trimmed_key != "ownerid":
                     continue
 
-                references.append(Reference(system, ref_entity, value, key[1:-6]))
+                references[value] = Reference(system, ref_entity, value, trimmed_key)
 
         self.payload = new_payload
         self.references = references
@@ -66,25 +68,18 @@ class Record:
         )
         return bool(list(response))
 
-    def build_export_string(self, system: System):
-        ref_obj = {}
-
-        for ref in self.references:
-            print(ref.key)
-            pass
-
-        return {
-            "entity": self.entity_name,
-            "payload": self.payload,
-            "references": self.references,
-        }
-
 
 def get_record(system: System, entity: str, id: str) -> Record:
     from msal_app import crm
 
     records = crm().get(system, entity, f"filter=({to_field_name(entity)} eq {id})")
     return records[0] if records else None
+
+
+# TODO: OPTIMIZE FUNCTION -> INPUT A LIST AND COMPARE RESULTS. THIS WILL USE ONLY ONE API CALL
+# This will only work with entities that are equal
+def filter_existing_records(records: list[Record], target_system) -> list[Record]:
+    return records
 
 
 known_records: dict[str, Record] = {}
