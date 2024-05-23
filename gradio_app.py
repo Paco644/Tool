@@ -1,3 +1,5 @@
+import sys
+
 import gradio as gr
 
 import main
@@ -103,13 +105,7 @@ class GradioApp:
                     )
                 send_button = gr.Button("Submit")
                 with gr.Row():
-                    reqs = gr.Json(label="JSON Data")
-
-                    final = gr.Textbox(
-                        placeholder="Output will be send here",
-                        label="Output",
-                        interactive=False,
-                    )
+                    web_api_output = gr.Json(label="JSON Data")
 
             # Listeners
             include_relations.change(
@@ -130,17 +126,13 @@ class GradioApp:
                     include_relations,
                     relation_dropdown,
                 ],
-                outputs=[reqs],
+                outputs=[web_api_output],
             )
 
             entity.change(
                 on_entity_change,
                 inputs=None,
                 outputs=[relation_dropdown, include_relations],
-            )
-
-            reqs.change(
-                main.process_requests, inputs=[target_system, reqs], outputs=[final]
             )
 
             # Tab 2

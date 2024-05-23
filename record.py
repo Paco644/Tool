@@ -1,6 +1,9 @@
+import pickle
+
 from misc import to_field_name, to_plural
 from misc import System, Ignore
 from reference import Reference
+from logger import logger, LoggerLevel
 
 
 class Record:
@@ -9,23 +12,23 @@ class Record:
     """
 
     def __init__(
-            self,
-            system: System,
-            entity_name: str,
-            original_payload: dict[str, any],
-            cache_record,
+        self,
+        system: System,
+        entity: str,
+        original_payload: dict[str, any],
+        cache_record,
     ):
         """
         A class wrapper for a crm record.
         :param system: The system the record is currently in
-        :param entity_name: The entity name of the record.
+        :param entity: The entity name of the record.
         :param original_payload: The original payload response returned from the web request.
         """
         self.system = system
-        self.entity_name = entity_name
+        self.entity = entity
         self.original_payload = original_payload
         self.references: list[Reference] = []
-        self.id = original_payload[to_field_name(entity_name)]
+        self.id = original_payload[to_field_name(entity)]
 
         new_payload = original_payload.copy()
         references = {}
@@ -37,7 +40,8 @@ class Record:
 
         for key, value in original_payload.items():
             if not value:
-                new_payload.pop(key)
+                #new_payload.pop(key)
+                new_payload[key] = "null"
                 continue
 
             if key.startswith("_"):
@@ -50,7 +54,10 @@ class Record:
 
                 trimmed_key = key[1:-6]
 
-                if ref_entity in [member.value for member in Ignore] and trimmed_key != "ownerid":
+                if (
+                    ref_entity in [member.value for member in Ignore]
+                    and trimmed_key != "ownerid"
+                ):
                     continue
 
                 references[value] = Reference(system, ref_entity, value, trimmed_key)
@@ -63,8 +70,8 @@ class Record:
 
         response = crm().get(
             target_system,
-            self.entity_name,
-            filter=f"filter=({to_field_name(self.entity_name)} eq {self.id})",
+            self.entity,
+            filter=f"filter=({to_field_name(self.entity)} eq {self.id})",
         )
         return bool(list(response))
 
@@ -82,4 +89,13 @@ def filter_existing_records(records: list[Record], target_system) -> list[Record
     return records
 
 
-known_records: dict[str, Record] = {}
+try:
+    with open("cache.pkl", "rb") as f:
+        known_records: dict[str, Record] = pickle.load(f)
+        loaded_records = known_records.copy()
+except EOFError:
+    logger().log("Error: 'cache.pkl' is empty or contains invalid pickled data.", LoggerLevel.WARNING)
+    known_records: dict[str, Record] = {}
+    loaded_records = known_records.copy()
+
+logger().log(f"Loaded {len(known_records)} records from pickle cache")

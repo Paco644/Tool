@@ -1,42 +1,39 @@
 import json
-
-import gradio
+import pickle
 
 from misc import System
 from gradio import update, Progress
 from msal_app import crm
-from record import known_records, Record, filter_existing_records
+from record import known_records, loaded_records, Record, filter_existing_records
 from reference import Reference
 
 
-def traverse_record(record: Record, already_traversed=None):
+def traverse_record(record: Record, target_system: System, already_traversed=None):
     if already_traversed is None:
         already_traversed = []
 
     def traverse_reference(record: Record, reference: Reference, already_traversed):
-        if reference.id in already_traversed:
+        if reference.id in already_traversed or reference.record.already_exists(
+            target_system
+        ):
+            print(
+                f"{reference.entity} with id {reference.id} already exists in {target_system}, binding id to key..."
+            )
             record.payload[
                 reference.key + "@odata.bind"
             ] = f"/{reference.entity}({reference.record.id})"
             return
 
-        data = [].append(reference.record.payload)
-        print(data)
+        record.payload[reference.key] = reference.record.payload
 
-        # record.payload[reference.key] = data
-        # CHANGE THIS ASAP
-        record.payload[
-            reference.key + "@odata.bind"
-        ] = f"/{reference.entity}({reference.record.id})"
-
-        traverse_record(reference.record, already_traversed)
+        traverse_record(reference.record, target_system, already_traversed)
 
     if record.id in already_traversed:
         return
     else:
         already_traversed.append(record.id)
 
-    print(f"Traversing record of type {record.entity_name} with id {record.id}")
+    print(f"Traversing record of type {record.entity} with id {record.id}")
 
     for ref in record.references.values():
         traverse_reference(record, ref, already_traversed)
@@ -49,31 +46,51 @@ def transfer_data(
     entity: str,
     include_relations: int,
     dropdown,
+    progress=Progress(),
 ):
-    print(f"{len(known_records.values())} records in cache")
+    print("Starting Transfer...")
 
     records = crm().get(source_system, entity, filter)
 
-    print("\nDONE GETTING ALL THE DATA\n")
+    print(f"Executing transfer with {len(known_records.values())} records in cache")
 
-    for record in records:
-        traverse_record(record)
+    obj = {"message": "No Data was transferred"}
+
+    for record in progress.tqdm(records, desc="Posting records...", unit="Record"):
+        if record.already_exists(target_system):
+            print(
+                f"{record.entity} with id {record.id} already exists in {target_system}, skipping..."
+            )
+            continue
+
+        traverse_record(record, target_system)
 
         obj = record.payload
 
-        post = crm().post(
-            target_system,
-            entity,
-            obj,
+        print(
+            f"Traversed {record.entity} with id {record.id}. Attempting to post to {target_system}..."
         )
 
-        print(post.json())
+        while True:
+            post = crm().post(
+                target_system,
+                entity,
+                obj,
+            )
+
+            # TODO ERROR HANDLING
+            # Check message and fix the error
+            message_json = post.json()
+            print(message_json)
+            break
+
+    known_records.update(loaded_records)
+
+    with open("cache.pkl", "wb") as f:
+        print("Opened cache and saving dictionary")
+        pickle.dump(known_records, f)
 
     return update(value=json.dumps(obj, indent=4))
-
-
-def process_requests(system, records):
-    return update(value="Done")
 
 
 def transfer_configuration_settings(
@@ -103,7 +120,6 @@ def debug(choice, input):
     if choice == 0:
         raise NotImplementedError("Operation not yet supported")
     elif choice == 1:
-        print()
         return update(value=crm().post(System.DEV01.value, "accounts", input).json())
 
 

@@ -1,4 +1,3 @@
-import json
 import os
 import msal
 import requests
@@ -9,14 +8,21 @@ from record import Record, known_records
 from misc import System, to_field_name, Ignore
 
 
-class App_do_not_use:
+class MsalApp:
     """
-    Wrapper for the msal library with request features for XRM
+    Wrapper for the msal library with request features for XRM.
+    Implements the singleton pattern to ensure only one instance exists.
     """
 
-    first_init = True
+    _instance = None
 
-    def __init__(self):
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialize(*args, **kwargs)
+        return cls._instance
+
+    def _initialize(self):
         """
         Initializes the application with the API credentials.
 
@@ -29,10 +35,6 @@ class App_do_not_use:
         - "client_secret": The client secret of the application.
         :raises KeyError: If one of the variables does not exist
         """
-
-        if not self.first_init:
-            return
-
         try:
             print("Creating confidential client application...")
             tenant = os.environ["tenant_id"]
@@ -40,15 +42,13 @@ class App_do_not_use:
             client_secret = os.environ["client_secret"]
         except KeyError:
             self.app = None
-            exit(0)
+            raise
 
         self.app = msal.ConfidentialClientApplication(
             client_id,
             authority=f"https://login.microsoftonline.com/{tenant}",
             client_credential=client_secret,
         )
-
-        self.first_init = False
 
     def generate_token(self, system: System) -> str:
         """
@@ -103,13 +103,7 @@ class App_do_not_use:
 
             if id in known_records:
                 record = known_records[id]
-                print(
-                    "Getting",
-                    record.entity_name,
-                    "with id",
-                    record.id,
-                    "from dictionary",
-                )
+                print(f"Getting {record.entity} with id {record.id} from dictionary")
                 records.append(record)
             else:
                 records.append(Record(system, entity, item, cache_record))
@@ -130,7 +124,6 @@ class App_do_not_use:
         :rtype: object
         """
         url = f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}"
-        print(url)
         return requests.post(
             url,
             headers={
@@ -138,10 +131,10 @@ class App_do_not_use:
                 "Content-Type": 'application/json',
                 "Prefer"       : "return=representation",
             },
-            json=json.dumps(payload),
+            json=payload,
         )
 
-    def patch(self, system, entity, id, data) -> object:
+    def patch(self, system: System, entity: str, id: str, data: object) -> Response:
         """
         Performs a PATCH request to update an entity in the specified system.
 
@@ -158,17 +151,12 @@ class App_do_not_use:
         url = f"https://{system}.api.crm4.dynamics.com/api/data/v9.2/{entity}({id})"
         return requests.patch(
             url,
-            data,
-            headers={"Authorization": f"Bearer {self.generate_token(system)}"},
-            json=json.dumps(data),
+            headers={
+                "Authorization": f"Bearer {self.generate_token(system)}",
+                "Content-Type": 'application/json',
+            },
+            json=data,
         )
-
-
-class MsalApp(App_do_not_use):
-    def __new__(cls):
-        if not hasattr(cls, "instance"):
-            cls.instance = super(App_do_not_use, cls).__new__(cls)
-        return cls.instance
 
 
 def crm() -> MsalApp:
