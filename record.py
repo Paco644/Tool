@@ -1,8 +1,7 @@
 import pickle
 
 from misc import to_field_name, to_plural
-from misc import System, Ignore
-from reference import Reference
+from misc import Ignore
 from logger import logger, LoggerLevel
 
 
@@ -12,11 +11,11 @@ class Record:
     """
 
     def __init__(
-        self,
-        system: System,
-        entity: str,
-        original_payload: dict[str, any],
-        cache_record,
+            self,
+            system,
+            entity: str,
+            original_payload: dict[str, any],
+            cache_record,
     ):
         """
         A class wrapper for a crm record.
@@ -40,8 +39,7 @@ class Record:
 
         for key, value in original_payload.items():
             if not value:
-                #new_payload.pop(key)
-                new_payload[key] = "null"
+                new_payload.pop(key)
                 continue
 
             if key.startswith("_"):
@@ -55,8 +53,7 @@ class Record:
                 trimmed_key = key[1:-6]
 
                 if (
-                    ref_entity in [member.value for member in Ignore]
-                    and trimmed_key != "ownerid"
+                        ref_entity in [member.value for member in Ignore] and trimmed_key != "ownerid"
                 ):
                     continue
 
@@ -76,7 +73,7 @@ class Record:
         return bool(list(response))
 
 
-def get_record(system: System, entity: str, id: str) -> Record:
+def get_record(system, entity: str, id: str) -> Record:
     from msal_app import crm
 
     records = crm().get(system, entity, f"filter=({to_field_name(entity)} eq {id})")
@@ -93,9 +90,21 @@ try:
     with open("cache.pkl", "rb") as f:
         known_records: dict[str, Record] = pickle.load(f)
         loaded_records = known_records.copy()
-except EOFError:
+except (EOFError, FileNotFoundError) as e:
     logger().log("Error: 'cache.pkl' is empty or contains invalid pickled data.", LoggerLevel.WARNING)
     known_records: dict[str, Record] = {}
     loaded_records = known_records.copy()
 
 logger().log(f"Loaded {len(known_records)} records from pickle cache")
+
+
+class Reference:
+
+    def __init__(self, system, entity: str, id: str, key: str):
+        self.system = system
+        self.entity = entity
+        self.id = id
+        self.key = key
+
+    def get_record(self) -> Record:
+        return get_record(self.system, self.entity, self.id)

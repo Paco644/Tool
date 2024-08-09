@@ -5,10 +5,7 @@
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
-      <env name="client_id" value="35f80fd4-5a97-4798-b6f2-ba976974f7a8" />
-      <env name="client_secret" value="7kW8L4c7Lrqp572txWhPYxXi4N9ZoyCiGPSlJGC3NrM=" />
       <env name="PYTHONUNBUFFERED" value="1" />
-      <env name="tenant_id" value="07858994-77ab-4ca3-9120-d94085b01b80" />
     </envs>
     <option name="SDK_HOME" value="" />
     <option name="WORKING_DIRECTORY" value="" />

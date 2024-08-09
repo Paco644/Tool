@@ -9,15 +9,6 @@ class Entity(Enum):
     pass
 
 
-class System(Enum):
-    PROD = "myxrm"
-    DEV01 = "myxrm-dev01"
-    DEV02 = "myxrm-dev02"
-    DEV03 = "myxrm-dev03"
-    DEV = "myxrm-dev"
-    TEST = "myxrm-test"
-
-
 class Activity(Entity):
     EMAILS = "emails"
     TASKS = "tasks"
@@ -33,8 +24,7 @@ class Ignore(Entity):
     ORGANIZATIONS = "organizations"
     TRANSACTIONCURRENCIES = "transactioncurrencies"
     ACCOUNTKPI = "msdyn_accountkpiitems"
-    SALESREGIONS = "afd_salesregions"
-    SALESHUBS = "afd_saleshubs"
+    TEAMS = 'teams'
 
 
 def get_enum_values(cls):

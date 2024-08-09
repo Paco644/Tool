@@ -3,7 +3,7 @@ import sys
 import gradio as gr
 
 import main
-from misc import System, get_enum_values, Activity, Ignore, to_field_name
+from misc import get_enum_values, Activity, Ignore, to_field_name
 from msal_app import crm
 
 
@@ -11,7 +11,7 @@ def on_entity_change():
     return gr.update(), gr.update(value="Only export response")
 
 
-def get_entities(system: System) -> list[str]:
+def get_entities(system) -> list[str]:
     """
     Retrieves all entities from a system
     :param system: Systemname (e.g. 'myxrm-dev01')
@@ -32,8 +32,12 @@ def get_entities(system: System) -> list[str]:
     return entities
 
 
-def on_system_change(system: System):
+def on_system_change(system):
     return gr.update(choices=get_entities(system))
+
+
+def on_system_change_solutions(system):
+    return gr.update(choices=main.get_solutions_from_system(system))
 
 
 def on_relation_settings_change(system, choice, entity_name: str):
@@ -55,23 +59,92 @@ def on_relation_settings_change(system, choice, entity_name: str):
 
 
 class GradioApp:
-    def __init__(self):
+    def __init__(self, config):
+        config = dict(config.items("Options"))
+
+        systems = config["systems"].split(",")
+        tar_system = config["defaulttargetenvironment"]
+        src_system = config["defaultsourceenvironment"]
+        path_to_solution = config["pathtomainsolution"]
+
         with gr.Blocks(theme=gr.themes.Soft()) as demo:
             source_system = gr.Dropdown(
                 label="Source system",
-                choices=get_enum_values(System),
-                value=System.PROD.value,
+                choices=systems,
+                value=src_system,
             )
+
+            # Tab 0
+            # Export Solution
+
+            solutions = main.get_solutions_from_system(source_system.value)
+
+            with gr.Tab("Export Solution"):
+                main_solution_path = gr.Textbox(
+                    label="Path to Customizing Solution", value=path_to_solution
+                )
+                solution_to_export = gr.Dropdown(
+                    label="Solution To Export",
+                    choices=solutions,
+                    value="AFDCustomizing",
+                    interactive=True,
+                )
+
+                export_button = gr.Button("Export Solution")
+
+                solution = gr.File(label="Solution Zip File", interactive=False)
+
+                export_button.click(
+                    main.export_solution,
+                    inputs=[solution_to_export, main_solution_path, source_system],
+                    outputs=solution,
+                )
+
+                source_system.change(
+                    on_system_change_solutions,
+                    inputs=[source_system],
+                    outputs=solution_to_export,
+                )
+
+            # Tab 1.5
+            # Transfer Solution
+
+            with gr.Tab("Transfer Solution"):
+                system_to_transfer_solution = gr.Dropdown(
+                    choices=systems, label="Target System", value=tar_system
+                )
+
+                solution_to_transfer = gr.Dropdown(
+                    label="Solution To Export",
+                    choices=solutions,
+                    value="Temp",
+                    interactive=True,
+                )
+
+                publish = gr.Checkbox(label="Publish customizations after transfer", value=True)
+
+                transfer_button = gr.Button("Transfer Solution")
+
+                transfer_output = gr.Textbox(label="Output", interactive=False)
+
+                transfer_button.click(main.transfer_solution,
+                                      inputs=[source_system, system_to_transfer_solution, solution_to_transfer,
+                                              publish], outputs=transfer_output)
+
+                source_system.change(
+                    on_system_change_solutions,
+                    inputs=[source_system],
+                    outputs=solution_to_transfer,
+                )
 
             # Tab 1
             # Transfer using Web API
 
-            tab1 = gr.Tab("Transfer using Web API")
-            with tab1:
+            with gr.Tab("Transfer using Web API"):
                 target_system = gr.Dropdown(
                     label="Target system",
-                    choices=get_enum_values(System),
-                    value=System.DEV01.value,
+                    choices=systems,
+                    value=tar_system,
                     interactive=True,
                 )
 
@@ -141,8 +214,8 @@ class GradioApp:
             with gr.Tab("Transfer configuration settings"):
                 target_system_tcs = gr.Dropdown(
                     label="Target system",
-                    choices=get_enum_values(System),
-                    value=System.DEV01.value,
+                    choices=systems,
+                    value=tar_system,
                     interactive=True,
                 )
 
@@ -162,13 +235,36 @@ class GradioApp:
             # Debug
 
             with gr.Tab("Debug"):
-                db_choice = gr.Radio(choices=["GET", "POST"], type="index", label="Method",
-                                     info="Choose one of these options", value="GET")
-                db_payload = gr.Textbox(label="Input", value=str({'name': 'Franz Meitz'}))
+                db_choice = gr.Radio(
+                    choices=["GET", "POST"],
+                    type="index",
+                    label="Method",
+                    info="Choose one of these options",
+                    value="GET",
+                )
+                db_payload = gr.Textbox(
+                    label="Input", value=str({"name": "Franz Meitz"})
+                )
                 db_submit = gr.Button("Execute")
                 db_output = gr.Json(label="Output")
 
             # Listeners
-            db_submit.click(main.debug, inputs=[db_choice, db_payload], outputs=[db_output])
+            db_submit.click(
+                main.debug, inputs=[db_choice, db_payload], outputs=[db_output]
+            )
+
+            # Tab 4
+            # Configuration
+
+            settings_inputs = []
+
+            with gr.Tab("Settings"):
+                for setting in config:
+                    tx = gr.Textbox(label=setting, value=config[setting], interactive=True)
+                    settings_inputs.append(tx)
+
+                settings_button = gr.Button("Save Settings")
+
+                settings_button.click(main.save_settings, inputs=settings_inputs)
 
         demo.launch(show_error=True, server_port=80, ssl_verify=True)

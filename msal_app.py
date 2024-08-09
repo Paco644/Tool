@@ -1,11 +1,13 @@
 import os
+from configparser import ConfigParser
+
 import msal
 import requests
 from requests import Response
 
 from record import Record, known_records
 
-from misc import System, to_field_name, Ignore
+from misc import to_field_name, Ignore
 
 
 class MsalApp:
@@ -36,10 +38,16 @@ class MsalApp:
         :raises KeyError: If one of the variables does not exist
         """
         try:
+
             print("Creating confidential client application...")
-            tenant = os.environ["tenant_id"]
-            client_id = os.environ["client_id"]
-            client_secret = os.environ["client_secret"]
+
+            config = ConfigParser()
+            config.read("conf.ini")
+            config = dict(config.items("Authorization"))
+
+            tenant = config["tenantid"]
+            client_id = config["clientid"]
+            client_secret = config["clientsecret"]
         except KeyError:
             self.app = None
             raise
@@ -50,7 +58,7 @@ class MsalApp:
             client_credential=client_secret,
         )
 
-    def generate_token(self, system: System) -> str:
+    def generate_token(self, system) -> str:
         """
         Generates a bearer token for authorization.
 
@@ -68,7 +76,7 @@ class MsalApp:
             result = self.app.acquire_token_for_client(scopes=scopes)
         return result["access_token"]
 
-    def get(self, system: System, entity: str, filter: str = None, cache_record: bool = True) -> list[Record]:
+    def get(self, system, entity: str, filter: str = None, cache_record: bool = True) -> list[Record]:
         """
         Retrieves data from a specified entity in a system.
 
@@ -110,7 +118,7 @@ class MsalApp:
 
         return records
 
-    def post(self, system: System, entity: str, payload: object) -> Response:
+    def post(self, system, entity: str, payload: object) -> Response:
         """
         Performs a POST request to create a new entity in the specified system.
 
@@ -134,7 +142,7 @@ class MsalApp:
             json=payload,
         )
 
-    def patch(self, system: System, entity: str, id: str, data: object) -> Response:
+    def patch(self, system, entity: str, id: str, data: object) -> Response:
         """
         Performs a PATCH request to update an entity in the specified system.
 
